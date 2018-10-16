@@ -24,9 +24,7 @@
 #include "types.h"
 #include "mem.h"
 #include "i8253.h"
-
-extern void set_port_write_redirector (uint16_t startport, uint16_t endport, void *callback);
-extern void set_port_read_redirector (uint16_t startport, uint16_t endport, void *callback);
+#include "ports.h"
 
 struct i8253_s i8253;
 

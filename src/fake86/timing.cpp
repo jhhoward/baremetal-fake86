@@ -22,7 +22,8 @@
 
 #include "config.h"
 #include "types.h"
-#ifdef _WIN32
+#if 1
+#elif defined(_WIN32)
 #include <Windows.h>
 LARGE_INTEGER queryperf;
 #else
@@ -49,7 +50,10 @@ extern uint32_t speed;
 extern uint8_t port3da, doaudio;
 
 void inittiming() {
-#ifdef _WIN32
+#if 1	// TODO
+	hostfreq = 1000;
+	curtick = 0;
+#elif defined(_WIN32)
 	QueryPerformanceFrequency (&queryperf);
 	hostfreq = queryperf.QuadPart;
 	QueryPerformanceCounter (&queryperf);
@@ -71,7 +75,9 @@ void inittiming() {
 void timing() {
 	uint8_t i8253chan;
 
-#ifdef _WIN32
+#if 1	// TODO
+	curtick++;
+#elif defined(_WIN32)
 	QueryPerformanceCounter (&queryperf);
 	curtick = queryperf.QuadPart;
 #else

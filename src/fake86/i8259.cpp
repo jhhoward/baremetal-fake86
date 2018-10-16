@@ -24,13 +24,11 @@
 #include "types.h"
 #include "mem.h"
 #include "i8259.h"
+#include "ports.h"
 
 struct structpic i8259;
 
 extern uint8_t keyboardwaitack;
-
-extern void set_port_write_redirector(uint16_t startport, uint16_t endport, void *callback);
-extern void set_port_read_redirector(uint16_t startport, uint16_t endport, void *callback);
 
 uint8_t in8259(uint16_t portnum) {
 	switch (portnum & 1) {

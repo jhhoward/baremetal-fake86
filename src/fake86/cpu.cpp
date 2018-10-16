@@ -25,6 +25,8 @@
 #include "cpu.h"
 #include "i8259.h"
 #include "i8253.h"
+#include "ports.h"
+#include "mem.h"
 
 extern struct i8253_s i8253;
 
@@ -44,7 +46,9 @@ static const uint8_t parity[0x100] = {
 	0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1
 };
 
-uint8_t	RAM[0x100000], readonly[0x100000];
+uint8_t* RAM;
+uint8_t* VRAM;
+uint8_t* readonlyflag;
 uint8_t	opcode, segoverride, reptype, bootdrive = 0, hdcount = 0;
 uint16_t segregs[4], savecs, saveip, ip, useseg, oldsp;
 uint8_t	tempcf, oldcf, cf, pf, af, zf, sf, tf, ifl, df, of, mode, reg, rm;
@@ -58,7 +62,7 @@ extern uint16_t	VGA_SC[0x100], VGA_CRTC[0x100], VGA_ATTR[0x100], VGA_GC[0x100];
 extern uint8_t updatedscreen;
 union _bytewordregs_ regs;
 
-uint8_t	portram[0x10000];
+uint8_t* portram;
 uint8_t	running = 0, debugmode, showcsip, verbose, mouseemu, didbootstrap = 0;
 uint8_t	ethif;
 
@@ -90,14 +94,58 @@ void intcall86 (uint8_t intnum);
 	}
 
 extern void	writeVGA (uint32_t addr32, uint8_t value);
-extern void	portout (uint16_t portnum, uint8_t value);
-extern void	portout16 (uint16_t portnum, uint16_t value);
-extern uint8_t	portin (uint16_t portnum);
-extern uint16_t portin16 (uint16_t portnum);
+
+void initRAM()
+{
+	log("Init RAM");
+
+	log("Alloc RAM");
+	RAM = allocmem(RAM_SIZE);
+	if (RAM) {
+		log("OK - %x -> %x", &RAM, RAM);
+	}
+	log("Alloc read only");
+	readonlyflag = allocmem(RAM_SIZE);
+	//readonlyflag = new uint8_t[RAM_SIZE]();
+	if (readonlyflag) {
+		log("OK - %x -> %x", &readonlyflag, readonlyflag);
+	}
+	log("Alloc port ram");
+	portram = allocmem(RAM_SIZE);
+	if (portram) {
+		log("OK");
+	}
+	log("Alloc VRAM");
+	VRAM = allocmem(VRAM_SIZE);
+	if (VRAM) {
+		log("OK");
+	}
+
+	log("Alloc port callbacks");
+	port_read_callback = (read_redirector*) allocmem(RAM_SIZE * sizeof(read_redirector));
+	port_write_callback = (write_redirector*)allocmem(RAM_SIZE * sizeof(write_redirector));
+	port_read_callback16 = (read_redirector_16*)allocmem(RAM_SIZE * sizeof(read_redirector_16));
+	port_write_callback16 = (write_redirector_16*)allocmem(RAM_SIZE * sizeof(write_redirector_16));
+	if (port_read_callback && port_write_callback && port_read_callback16 && port_write_callback16) {
+		log("OK");
+	}
+
+
+	log("Nulling callbacks");
+	clearmem(port_write_callback, RAM_SIZE);
+	clearmem(port_read_callback, RAM_SIZE);
+	clearmem(port_write_callback16, RAM_SIZE);
+	clearmem(port_read_callback16, RAM_SIZE);
+
+
+	log("Setting memory to read only");
+	clearmem(readonlyflag, RAM_SIZE);
+	log("Done!");
+}
 
 void write86 (uint32_t addr32, uint8_t value) {
 	tempaddr32 = addr32 & 0xFFFFF;
-	if (readonly[tempaddr32] || (tempaddr32 >= 0xC0000) ) {
+	if (readonlyflag[tempaddr32] || (tempaddr32 >= 0xC0000) ) {
 			return;
 		}
 

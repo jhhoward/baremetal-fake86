@@ -25,6 +25,10 @@
 #include "log.h"
 #include "mem.h"
 #include "disk.h"
+#include "ports.h"
+#include "render.h"
+#include "video.h"
+#include "cpu.h"
 
 #include "../../data/dosboot.h"
 #include "../../data/pcxtbios.h"
@@ -32,7 +36,6 @@
 
 const char *build = "Fake86 v0.12.9.19";
 
-extern uint8_t RAM[0x100000], readonly[0x100000];
 extern uint8_t running, renderbenchmark;
 
 extern void reset86();
@@ -90,7 +93,7 @@ uint32_t loadrom (uint32_t addr32, char *filename, uint8_t failure_fatal) {
 
 uint32_t loadembeddedrom(uint32_t addr32, const uint8_t* rom, uint32_t size) {
 	copymem(RAM + addr32, rom, size);
-	setmem((void *)&readonly[addr32], 1, size);
+	setmem((void *)&readonlyflag[addr32], 1, size);
 	return size;
 }
 
@@ -107,10 +110,6 @@ extern void init8237();
 extern void initVideoPorts();
 extern void killaudio();
 extern void initsermouse (uint16_t baseport, uint8_t irq);
-extern void *port_write_callback[0x10000];
-extern void *port_read_callback[0x10000];
-extern void *port_write_callback16[0x10000];
-extern void *port_read_callback16[0x10000];
 extern void initadlib (uint16_t baseport);
 extern void initsoundsource();
 extern void isa_ne2000_init (uint16_t baseport, uint8_t irq);
@@ -128,10 +127,6 @@ void printbinary (uint8_t value) {
 uint8_t usessource = 0;
 void inithardware() {
 	log ("Initializing emulated hardware:\n");
-	setmem (port_write_callback, 0, sizeof (port_write_callback) );
-	setmem (port_read_callback, 0, sizeof (port_read_callback) );
-	setmem (port_write_callback16, 0, sizeof (port_write_callback16) );
-	setmem (port_read_callback16, 0, sizeof (port_read_callback16) );
 	log ("  - Intel 8253 timer: ");
 	init8253();
 	log ("OK\n");
@@ -166,56 +161,65 @@ void inithardware() {
 	initscreen ( (uint8_t *) build);
 }
 
-#ifdef _WIN32
-void dumpscreen();
-#else
-void dumpscreen() {}
-#endif
-
 extern void bufsermousedata (uint8_t value);
-int main (int argc, char *argv[]) {
-	log ("%s (c)2010-2012 Mike Chambers\n", build);
-	log ("[A portable, open-source 8086 PC emulator]\n\n");
 
-	setmem (readonly, 0, 0x100000);
+void initfake86()
+{
+	log("%s (c)2010-2012 Mike Chambers\n", build);
+	log("[A portable, open-source 8086 PC emulator]\n\n");
 
+	initRAM();
+
+	log("Inserting boot disk\n");
 	insertembeddeddisk(0, dosboot, sizeof(dosboot));
 
+	log("Loading BIOS\n");
 	loadembeddedrom(0xFE000UL, pcxtbios, sizeof(pcxtbios));
+	log("Loading video ROM\n");
 	loadembeddedrom(0xC0000UL, videorom, sizeof(videorom));
 
 #if 0
-	if (!loadrom (0xFE000UL, biosfile, 1) ) return (-1);
-//	loadrom (0xF6000UL, PATH_DATAFILES "rombasic.bin", 0);
+	if (!loadrom(0xFE000UL, biosfile, 1)) return (-1);
+	//	loadrom (0xF6000UL, PATH_DATAFILES "rombasic.bin", 0);
 #ifdef DISK_CONTROLLER_ATA
-	if (!loadrom (0xD0000UL, PATH_DATAFILES "ide_xt.bin", 1) ) return (-1);
+	if (!loadrom(0xD0000UL, PATH_DATAFILES "ide_xt.bin", 1)) return (-1);
 #endif
-	if (!loadrom (0xC0000UL, PATH_DATAFILES "videorom.bin", 1) ) return (-1);
+	if (!loadrom(0xC0000UL, PATH_DATAFILES "videorom.bin", 1)) return (-1);
 #endif
-	log ("\nInitializing CPU... ");
+	log("\nInitializing CPU... ");
 	running = 1;
 	reset86();
-	log ("OK!\n");
+	log("OK!\n");
 
 	inithardware();
+}
 
-	int count = 0;
-	while (running) {
-			exec86 (10000);
-			handleinput();
-			draw();
-			if (scrmodechange) doscrmodechange();
-			count++;
+bool simulatefake86()
+{
+	if (!running)
+		return false;
 
-			if (count == 100)
-			{
-				dumpscreen();
-				count = 0;
-				//running = false;
-			}
-		}
+	exec86(10000);
+	if (scrmodechange) doscrmodechange();
 
+	//handleinput();
+
+	return running != 0;
+}
+
+bool drawfake86(uint8_t* buffer)
+{
+	draw();
+	return blitscreen(buffer);
+}
+
+void shutdownfake86()
+{
 	killaudio();
+}
 
-	return (0);
+void getactivepalette(uint8_t** palette, int* paletteSize)
+{
+	*palette = (uint8_t*) activepalette;
+	*paletteSize = (activepalette == palettevga) ? 256 : 16;
 }

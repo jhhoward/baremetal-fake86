@@ -25,14 +25,13 @@
 #include "mem.h"
 #include "blaster.h"
 #include "i8237.h"
+#include "ports.h"
 
 extern struct blaster_s blaster;
 
 struct dmachan_s dmachan[4];
 uint8_t flipflop = 0;
 
-extern void set_port_write_redirector (uint16_t startport, uint16_t endport, void *callback);
-extern void set_port_read_redirector (uint16_t startport, uint16_t endport, void *callback);
 extern uint8_t read86 (uint32_t addr32);
 
 extern uint8_t RAM[0x100000];

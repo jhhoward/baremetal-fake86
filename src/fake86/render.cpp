@@ -23,13 +23,14 @@
 
 #include "types.h"
 #include "config.h"
+#include "render.h"
+#include "cpu.h"
 
 //uint32_t *scalemap = nullptr;
 uint32_t scalemap[(OUTPUT_DISPLAY_WIDTH + 1) * OUTPUT_DISPLAY_HEIGHT * 4];
 uint8_t regenscalemap = 1;
 
-extern uint8_t RAM[0x100000], portram[0x10000];
-extern uint8_t VRAM[262144], vidmode, cgabg, blankattr, vidgfxmode, vidcolor, running;
+extern uint8_t vidmode, cgabg, blankattr, vidgfxmode, vidcolor, running;
 extern uint16_t cursx, cursy, cols, rows, vgapage, cursorposition, cursorvisible;
 extern uint8_t updatedscreen, clocksafe, port3da, port6, portout16;
 extern uint16_t VGA_SC[0x100], VGA_CRTC[0x100], VGA_ATTR[0x100], VGA_GC[0x100];
@@ -37,6 +38,7 @@ extern uint32_t videobase, textbase, x, y;
 extern uint8_t fontcga[32768];
 extern uint32_t palettecga[16], palettevga[256];
 extern uint32_t usefullscreen, usegrabmode;
+extern uint32_t* activepalette;
 
 uint64_t totalframes = 0;
 uint32_t framedelay = 20;
@@ -44,7 +46,6 @@ uint8_t scrmodechange = 0, noscale = 0, nosmooth = 1, renderbenchmark = 0, doaud
 char windowtitle[128];
 
 void initcga();
-void blitscreen();
 
 uint8_t initscreen (uint8_t *ver) {
 #if 0
@@ -73,7 +74,8 @@ uint8_t initscreen (uint8_t *ver) {
 	return (1);
 }
 
-uint32_t prestretch[1024][1024];
+uint8_t prestretch[1024][1024];
+//uint32_t prestretch[1024][1024];
 uint32_t nw, nh; //native width and height, pre-stretching (i.e. 320x200 for mode 13h)
 void createscalemap() {
 	uint32_t srcx, srcy, dstx, dsty, scalemapptr;
@@ -309,7 +311,11 @@ void doubleblit (SDL_Surface *target) {
 
 extern uint16_t vtotal;
 void draw () {
-	uint32_t planemode, vgapage, color, chary, charx, vidptr, divx, divy, curchar, curpixel, usepal, intensity, blockw, curheight, x1, y1;
+	if (!updatedscreen)
+		return;
+
+	uint32_t planemode, vgapage, /*color,*/ chary, charx, vidptr, divx, divy, curchar, curpixel, usepal, intensity, blockw, curheight, x1, y1;
+	uint8_t color;
 	switch (vidmode) {
 			case 0:
 			case 1:
@@ -343,18 +349,18 @@ void draw () {
 									color = fontcga[curchar*128 + (y%16) *8 + ( (x/divx) %8) ];
 								}
 							if (vidcolor) {
-									if (!color) if (portram[0x3D8]&128) color = palettecga[ (RAM[vidptr+1]/16) &7];
-										else color = palettecga[RAM[vidptr+1]/16]; //high intensity background
-									else color = palettecga[RAM[vidptr+1]&15];
+									if (!color) if (portram[0x3D8]&128) color = (RAM[vidptr+1]/16) &7;
+										else color = RAM[vidptr+1]/16; //high intensity background
+									else color = RAM[vidptr+1]&15;
 								}
 							else {
 									if ( (RAM[vidptr+1] & 0x70) ) {
-											if (!color) color = palettecga[7];
-											else color = palettecga[0];
+											if (!color) color = 7;
+											else color = 0;
 										}
 									else {
-											if (!color) color = palettecga[0];
-											else color = palettecga[7];
+											if (!color) color = 0;
+											else color = 7;
 										}
 								}
 							prestretch[y][x] = color;
@@ -389,12 +395,12 @@ void draw () {
 								if (vidmode==4) {
 										curpixel = curpixel * 2 + usepal + intensity;
 										if (curpixel == (usepal + intensity) )  curpixel = cgabg;
-										color = palettecga[curpixel];
+										color = curpixel;
 										prestretch[y][x] = color;
 									}
 								else {
 										curpixel = curpixel * 63;
-										color = palettecga[curpixel];
+										color = curpixel;
 										prestretch[y][x] = color;
 									}
 							}
@@ -409,7 +415,7 @@ void draw () {
 								chary = y;
 								vidptr = videobase + ( (chary>>1) * 80) + ( (chary&1) * 8192) + (charx>>3);
 								curpixel = (RAM[vidptr]>> (7- (charx&7) ) ) &1;
-								color = palettecga[curpixel*15];
+								color = curpixel*15;
 								prestretch[y][x] = color;
 							}
 					}
@@ -424,11 +430,11 @@ void draw () {
 								vidptr = videobase + ( (y & 3) << 13) + (y >> 2) *90 + (x >> 3);
 								curpixel = (RAM[vidptr]>> (7- (charx&7) ) ) &1;
 #ifdef __BIG_ENDIAN__
-								if (curpixel) color = 0xFFFFFF00;
+								if (curpixel) color = 0xF;
 #else
-								if (curpixel) color = 0x00FFFFFF;
+								if (curpixel) color = 0xF;
 #endif
-								else color = 0x00000000;
+								else color = 0x00;
 								prestretch[y][x] = color;
 							}
 					}
@@ -439,8 +445,8 @@ void draw () {
 				for (y=0; y<400; y++)
 					for (x=0; x<640; x++) {
 							vidptr = 0xB8000 + (y>>2) *80 + (x>>3) + ( (y>>1) &1) *8192;
-							if ( ( (x>>1) &1) ==0) color = palettecga[RAM[vidptr] >> 4];
-							else color = palettecga[RAM[vidptr] & 15];
+							if ( ( (x>>1) &1) ==0) color = RAM[vidptr] >> 4;
+							else color = RAM[vidptr] & 15;
 							prestretch[y][x] = color;
 						}
 				break;
@@ -450,8 +456,8 @@ void draw () {
 				for (y=0; y<400; y++)
 					for (x=0; x<640; x++) {
 							vidptr = 0xB8000 + (y>>3) *160 + (x>>2) + ( (y>>1) &3) *8192;
-							if ( ( (x>>1) &1) ==0) color = palettecga[RAM[vidptr] >> 4];
-							else color = palettecga[RAM[vidptr] & 15];
+							if ( ( (x>>1) &1) ==0) color = RAM[vidptr] >> 4;
+							else color = RAM[vidptr] & 15;
 							prestretch[y][x] = color;
 						}
 				break;
@@ -469,7 +475,7 @@ void draw () {
 							color += ( ( (VRAM[0x10000 + vidptr] >> x1) & 1) << 1);
 							color += ( ( (VRAM[0x20000 + vidptr] >> x1) & 1) << 2);
 							color += ( ( (VRAM[0x30000 + vidptr] >> x1) & 1) << 3);
-							color = palettevga[color];
+							//color = palettevga[color];
 							prestretch[y][x] = color;
 						}
 				break;
@@ -484,7 +490,7 @@ void draw () {
 							color += ( ( (VRAM[0x10000 + vidptr] >> x1) & 1) << 1);
 							color += ( ( (VRAM[0x20000 + vidptr] >> x1) & 1) << 2);
 							color += ( ( (VRAM[0x30000 + vidptr] >> x1) & 1) << 3);
-							color = palettevga[color];
+							//color = palettevga[color];
 							prestretch[y][x] = color;
 						}
 				break;
@@ -499,7 +505,8 @@ void draw () {
 							color |= ( (VRAM[vidptr+0x10000] >> (~x & 7) ) & 1) << 1;
 							color |= ( (VRAM[vidptr+0x20000] >> (~x & 7) ) & 1) << 2;
 							color |= ( (VRAM[vidptr+0x30000] >> (~x & 7) ) & 1) << 3;
-							prestretch[y][x] = palettevga[color];
+							//color = palettevga[color];
+							prestretch[y][x] = color;
 						}
 				break;
 			case 0x13:
@@ -516,12 +523,12 @@ void draw () {
 				vgapage = ( (uint32_t) VGA_CRTC[0xC]<<8) + (uint32_t) VGA_CRTC[0xD];
 				for (y=0; y<nh; y++)
 					for (x=0; x<nw; x++) {
-							if (!planemode) color = palettevga[RAM[videobase + y*nw + x]];
+							if (!planemode) color = RAM[videobase + y*nw + x];
 							else {
 									vidptr = y*nw + x;
 									vidptr = vidptr/4 + (x & 3) *0x10000;
 									vidptr = vidptr + vgapage - (VGA_ATTR[0x13] & 15);
-									color = palettevga[VRAM[vidptr]];
+									color = VRAM[vidptr];
 								}
 							prestretch[y][x] = color;
 						}
@@ -536,13 +543,11 @@ void draw () {
 					y1 = cursy * 8 + 8 - curheight;
 					for (y=y1*2; y<=y1*2+curheight-1; y++)
 						for (x=x1; x<=x1+blockw-1; x++) {
-								color = palettecga[RAM[videobase+cursy*cols*2+cursx*2+1]&15];
+								color = RAM[videobase+cursy*cols*2+cursx*2+1]&15;
 								prestretch[y&1023][x&1023] = color;
 							}
 				}
 		}
-
-	blitscreen();
 
 #if 0
 	if (nosmooth) {
@@ -553,69 +558,15 @@ void draw () {
 #endif
 }
 
-#ifdef _WIN32
-#include <Windows.h>
-#include <conio.h>
-#include <stdio.h>
-
-void dumpscreen()
+bool blitscreen(uint8_t* screenbuffer)
 {
-	//printf("Screen mode %d : %d x %d\n", vidmode, cols, rows);
 	if (!updatedscreen)
-		return;
-
-	COORD c = { 0, 0 };
-	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), c);
-
-	vgapage = ((uint32_t)VGA_CRTC[0xC] << 8) + (uint32_t)VGA_CRTC[0xD];
-	for (int chary = 0; chary < rows; chary++)
-	{
-		uint32_t vidptr;
-		uint8_t curchar;
-
-		for (int charx = 0; charx < cols; charx++)
-		{
-			if ((portram[0x3D8] == 9) && (portram[0x3D4] == 9)) {
-				uint32_t vidptr = vgapage + videobase + chary*cols * 2 + charx * 2;
-				curchar = RAM[vidptr];
-			}
-			else {
-				vidptr = videobase + chary*cols * 2 + charx * 2;
-				curchar = RAM[vidptr];
-			}
-			printf("%c", curchar);
-		}
-		printf("\n");
-	}
-
-	//for (int n = 0; n < rows; n++)
-	//{
-	//	printf("\033[F");
-	//}
-	COORD cursorcoord = { cursx, cursy };
-	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), cursorcoord);
-
-	updatedscreen = 0;
-}
-
-#include "../../win32/lodepng.h"
-
-uint32_t blitbuffer[640 * 400];
-
-void blitscreen()
-{
-	static int count = 0;
-	if (count)
-	{
-		count--;
-		return;
-	}
-	count = 100;
+		return false;
 
 	uint32_t srcx, srcy, dstx, dsty, scalemapptr;
 	int32_t ofs;
-	uint32_t targetw = 640;
-	uint32_t targeth = 400;
+	uint32_t targetw = OUTPUT_DISPLAY_WIDTH;
+	uint32_t targeth = OUTPUT_DISPLAY_HEIGHT;
 
 	scalemapptr = 0;
 	for (dsty = 0; dsty<targeth; dsty++) {
@@ -623,13 +574,13 @@ void blitscreen()
 		ofs = dsty*targetw;
 		for (dstx = 0; dstx<targetw; dstx++) {
 			srcx = scalemap[scalemapptr++];
-			//uint32_t rgba = prestretch[srcy][srcx];
-			uint32_t rgba = prestretch[dsty][dstx];
-			blitbuffer[ofs++] = rgba | 0xff000000;
+			uint8_t rgba = prestretch[srcy][srcx];
+			screenbuffer[ofs++] = rgba;
 		}
 	}
 
-	lodepng::encode("output.png", (unsigned char*)blitbuffer, 640, 400, LCT_RGBA);
+	updatedscreen = 0;
+	return true;
 }
 
-#endif
+

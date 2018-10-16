@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug (with WinPCap)|Win32">
       <Configuration>Debug (with WinPCap)</Configuration>
@@ -29,28 +29,28 @@
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release (with WinPCap)|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug (with WinPCap)|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -116,14 +116,15 @@
       <WarningLevel>Level3</WarningLevel>
       <PrecompiledHeader>
       </PrecompiledHeader>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Disabled</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>PATH_DATAFILES="";_CRT_SECURE_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <OmitFramePointers>true</OmitFramePointers>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -189,7 +190,7 @@
     <ClCompile Include="..\src\fake86\i8253.cpp" />
     <ClCompile Include="..\src\fake86\i8259.cpp" />
     <ClCompile Include="..\src\fake86\input.cpp" />
-    <ClCompile Include="..\src\fake86\main.cpp" />
+    <ClCompile Include="..\src\fake86\fake86.cpp" />
     <ClCompile Include="..\src\fake86\mem.cpp" />
     <ClCompile Include="..\src\fake86\ports.cpp" />
     <ClCompile Include="..\src\fake86\render.cpp" />
@@ -199,6 +200,7 @@
     <ClCompile Include="..\src\fake86\timing.cpp" />
     <ClCompile Include="..\src\fake86\video.cpp" />
     <ClCompile Include="lodepng.cpp" />
+    <ClCompile Include="winmain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\fake86\audio.h" />
@@ -206,13 +208,17 @@
     <ClInclude Include="..\src\fake86\config.h" />
     <ClInclude Include="..\src\fake86\cpu.h" />
     <ClInclude Include="..\src\fake86\disk.h" />
+    <ClInclude Include="..\src\fake86\fake86.h" />
     <ClInclude Include="..\src\fake86\i8237.h" />
     <ClInclude Include="..\src\fake86\i8253.h" />
     <ClInclude Include="..\src\fake86\i8259.h" />
     <ClInclude Include="..\src\fake86\log.h" />
     <ClInclude Include="..\src\fake86\mem.h" />
+    <ClInclude Include="..\src\fake86\ports.h" />
+    <ClInclude Include="..\src\fake86\render.h" />
     <ClInclude Include="..\src\fake86\sermouse.h" />
     <ClInclude Include="..\src\fake86\types.h" />
+    <ClInclude Include="..\src\fake86\video.h" />
     <ClInclude Include="lodepng.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

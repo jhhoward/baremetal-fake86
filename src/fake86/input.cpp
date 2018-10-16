@@ -271,6 +271,20 @@ extern void setwindowtitle (uint8_t *extra);
 extern uint8_t scrmodechange;
 extern uint32_t usefullscreen;
 
+void handlekeydown(uint16_t scancode)
+{
+	portram[0x60] = translatescancode(scancode);
+	portram[0x64] |= 2;
+	doirq(1);
+}
+
+void handlekeyup(uint16_t scancode)
+{
+	portram[0x60] = translatescancode (scancode) | 0x80;
+	portram[0x64] |= 2;
+	doirq (1);
+}
+
 #ifdef _WIN32
 #include <stdint.h>
 #include <conio.h>
@@ -285,13 +299,6 @@ void handleinput() {
 #else
 
 void handleinput() {
-	if (_kbhit()) {
-		char c = _getch();
-		portram[0x60] = translatescancode(c);
-		portram[0x64] |= 2;
-		doirq(1);
-	}
-
 #if 0
 	SDL_Event event;
 	int mx = 0, my = 0;

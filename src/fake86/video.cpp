@@ -26,26 +26,23 @@
 #include "cpu.h"
 #include "log.h"
 #include "../../data/asciivga.h"
-
-extern void set_port_write_redirector (uint16_t startport, uint16_t endport, void *callback);
-extern void set_port_read_redirector (uint16_t startport, uint16_t endport, void *callback);
+#include "ports.h"
 
 extern uint8_t verbose;
 extern union _bytewordregs_ regs;
-extern uint8_t RAM[0x100000], readonly[0x100000];
-extern uint8_t portram[0x10000];
 extern uint16_t segregs[4];
 
 extern uint8_t read86 (uint32_t addr32);
 extern uint8_t write86 (uint32_t addr32, uint8_t value);
 extern uint8_t scrmodechange;
 
-uint8_t VRAM[262144], vidmode, cgabg, blankattr, vidgfxmode, vidcolor;
+uint8_t vidmode, cgabg, blankattr, vidgfxmode, vidcolor;
 uint16_t cursx, cursy, cols = 80, rows = 25, vgapage, cursorposition, cursorvisible;
-uint8_t updatedscreen, clocksafe, port3da, port6, portout16;
+uint8_t updatedscreen, clocksafe, port3da, port6;
 uint16_t VGA_SC[0x100], VGA_CRTC[0x100], VGA_ATTR[0x100], VGA_GC[0x100];
 uint32_t videobase= 0xB8000, textbase = 0xB8000, x, y;
-uint32_t palettecga[16], palettevga[256];
+uint32_t palettecga[16], palettevga[256], palettemono[2];
+uint32_t* activepalette = palettecga;
 
 uint8_t latchRGB = 0, latchPal = 0, VGA_latch[4], stateDAC = 0;
 uint8_t latchReadRGB = 0, latchReadPal = 0;
@@ -79,6 +76,7 @@ void vidinterrupt() {
 							vidcolor = 0;
 							vidgfxmode = 0;
 							blankattr = 7;
+							activepalette = palettecga;
 							for (tempcalc = videobase; tempcalc<videobase+16384; tempcalc+=2) {
 									RAM[tempcalc] = 0;
 									RAM[tempcalc+1] = blankattr;
@@ -91,6 +89,7 @@ void vidinterrupt() {
 							vidcolor = 1;
 							vidgfxmode = 0;
 							blankattr = 7;
+							activepalette = palettecga;
 							for (tempcalc = videobase; tempcalc<videobase+16384; tempcalc+=2) {
 									RAM[tempcalc] = 0;
 									RAM[tempcalc+1] = blankattr;
@@ -104,6 +103,7 @@ void vidinterrupt() {
 							vidcolor = 1;
 							vidgfxmode = 0;
 							blankattr = 7;
+							activepalette = palettecga;
 							for (tempcalc = videobase; tempcalc<videobase+16384; tempcalc+=2) {
 									RAM[tempcalc] = 0;
 									RAM[tempcalc+1] = blankattr;
@@ -117,6 +117,7 @@ void vidinterrupt() {
 							vidcolor = 1;
 							vidgfxmode = 0;
 							blankattr = 7;
+							activepalette = palettecga;
 							for (tempcalc = videobase; tempcalc<videobase+16384; tempcalc+=2) {
 									RAM[tempcalc] = 0;
 									RAM[tempcalc+1] = blankattr;
@@ -131,6 +132,7 @@ void vidinterrupt() {
 							vidcolor = 1;
 							vidgfxmode = 1;
 							blankattr = 7;
+							activepalette = palettecga;
 							for (tempcalc = videobase; tempcalc<videobase+16384; tempcalc+=2) {
 									RAM[tempcalc] = 0;
 									RAM[tempcalc+1] = blankattr;
@@ -145,6 +147,7 @@ void vidinterrupt() {
 							vidcolor = 0;
 							vidgfxmode = 1;
 							blankattr = 7;
+							activepalette = palettecga;
 							for (tempcalc = videobase; tempcalc<videobase+16384; tempcalc+=2) {
 									RAM[tempcalc] = 0;
 									RAM[tempcalc+1] = blankattr;
@@ -157,6 +160,7 @@ void vidinterrupt() {
 							rows = 25;
 							vidcolor = 0;
 							vidgfxmode = 1;
+							activepalette = palettecga;
 							for (tempcalc = videobase; tempcalc<videobase+16384; tempcalc++) {
 									RAM[tempcalc] = 0;
 								}
@@ -169,6 +173,7 @@ void vidinterrupt() {
 							vidcolor = 1;
 							vidgfxmode = 1;
 							blankattr = 0;
+							activepalette = palettecga;
 							if ( (regs.byteregs[regal]&0x80) ==0) for (tempcalc = videobase; tempcalc<videobase+65535; tempcalc+=2) {
 										RAM[tempcalc] = 0;
 										RAM[tempcalc+1] = blankattr;
@@ -184,6 +189,7 @@ void vidinterrupt() {
 							vidcolor = 1;
 							vidgfxmode = 1;
 							blankattr = 0;
+							activepalette = palettevga;
 							for (tempcalc = videobase; tempcalc<videobase+65535; tempcalc+=2) {
 									RAM[tempcalc] = 0;
 									RAM[tempcalc+1] = blankattr;
@@ -242,7 +248,8 @@ void vidinterrupt() {
 				break;
 			case 0x1A: //get display combination code (ps, vga/mcga)
 				regs.byteregs[regal] = 0x1A;
-				regs.byteregs[regbl] = 0x8;
+				regs.byteregs[regbl] = 0x8; // VGA
+				//regs.byteregs[regbl] = 0x2; // CGA
 				break;
 		}
 }
@@ -821,3 +828,33 @@ void initVideoPorts() {
 	set_port_write_redirector (0x3B0, 0x3DA, &outVGA);
 	set_port_read_redirector (0x3B0, 0x3DA, &inVGA);
 }
+
+void dumptextscreen(char* outbuffer, int* outcursorx, int* outcursory)
+{
+	vgapage = ((uint32_t)VGA_CRTC[0xC] << 8) + (uint32_t)VGA_CRTC[0xD];
+	for (int chary = 0; chary < rows; chary++)
+	{
+		uint32_t vidptr;
+		uint8_t curchar;
+
+		for (int charx = 0; charx < cols; charx++)
+		{
+			if ((portram[0x3D8] == 9) && (portram[0x3D4] == 9)) {
+				uint32_t vidptr = vgapage + videobase + chary*cols * 2 + charx * 2;
+				curchar = RAM[vidptr];
+			}
+			else {
+				vidptr = videobase + chary*cols * 2 + charx * 2;
+				curchar = RAM[vidptr];
+			}
+			if (curchar == 0)
+				curchar = ' ';
+			*outbuffer++ = curchar;
+		}
+		*outbuffer++ = '\n';
+	}
+	*outbuffer++ = '\0';
+	*outcursorx = cursx;
+	*outcursory = cursy;
+}
+

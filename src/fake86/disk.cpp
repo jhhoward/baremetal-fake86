@@ -23,7 +23,7 @@
 #include "disk.h"
 #include "cpu.h"
 
-extern uint8_t RAM[0x100000], cf, hdcount;
+extern uint8_t cf, hdcount;
 extern uint16_t segregs[4];
 extern union _bytewordregs_ regs;
 

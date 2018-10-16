@@ -22,9 +22,8 @@
 #include "config.h"
 #include "types.h"
 #include "sermouse.h"
+#include "ports.h"
 
-extern void set_port_write_redirector (uint16_t startport, uint16_t endport, void *callback);
-extern void set_port_read_redirector (uint16_t startport, uint16_t endport, void *callback);
 extern void doirq (uint8_t irqnum);
 
 struct sermouse_s sermouse;

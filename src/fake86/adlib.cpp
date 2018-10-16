@@ -21,9 +21,7 @@
 
 #include "config.h"
 #include "types.h"
-
-extern void set_port_write_redirector (uint16_t startport, uint16_t endport, void *callback);
-extern void set_port_read_redirector (uint16_t startport, uint16_t endport, void *callback);
+#include "ports.h"
 
 extern int32_t usesamplerate;
 

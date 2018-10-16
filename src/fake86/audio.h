@@ -35,3 +35,5 @@ struct wav_hdr_s {
 	uint8_t	Subchunk2ID[4]; /* "data"  string   */
 	uint32_t Subchunk2Size;  /* Sampled data length	*/
 };
+
+extern uint8_t speakerenabled;
