@@ -286,16 +286,30 @@ void handlekeyup(uint16_t scancode)
 	doirq (1);
 }
 
-void handlekeydownraw(uint8_t scancode)
+void handlekeydownraw(uint16_t scancode)
 {
-	portram[0x60] = scancode;
+	uint8_t extension = (uint8_t)(scancode >> 8);
+	if (extension)
+	{
+		portram[0x60] = extension;
+		portram[0x64] |= 2;
+		doirq(1);
+	}
+	portram[0x60] = (uint8_t)scancode;
 	portram[0x64] |= 2;
 	doirq(1);
 }
 
-void handlekeyupraw(uint8_t scancode)
+void handlekeyupraw(uint16_t scancode)
 {
-	portram[0x60] = scancode | 0x80;
+	uint8_t extension = (uint8_t)(scancode >> 8);
+	if (extension)
+	{
+		portram[0x60] = extension;
+		portram[0x64] |= 2;
+		doirq(1);
+	}
+	portram[0x60] = (uint8_t)scancode | 0x80;
 	portram[0x64] |= 2;
 	doirq(1);
 }

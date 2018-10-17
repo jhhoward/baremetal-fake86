@@ -30,7 +30,7 @@
 #include <circle/interrupt.h>
 #include <circle/timer.h>
 #include <circle/logger.h>
-//#include <SDCard/emmc.h>
+#include <SDCard/emmc.h>
 //#include <circle/fs/fat/fatfs.h>
 #include <circle/types.h>
 #include <circle/usb/dwhcidevice.h>
@@ -42,6 +42,18 @@ enum TShutdownMode
 	ShutdownNone,
 	ShutdownHalt,
 	ShutdownReboot
+};
+
+enum class EventType
+{
+	KeyPress,
+	KeyRelease
+};
+
+struct InputEvent
+{
+	EventType eventType;
+	u16 scancode;
 };
 
 class CKernel
@@ -59,6 +71,8 @@ public:
 
 	
 private:
+	void QueueEvent(EventType eventType, u16 scancode);
+
 	// do not change this order
 	CMemorySystem		m_Memory;
 	CActLED			m_ActLED;
@@ -72,15 +86,16 @@ private:
 	CLogger			m_Logger;
 	CDWHCIDevice		m_DWHCI;
 
-//	CEMMCDevice		m_EMMC;
+	CEMMCDevice		m_EMMC;
 	//CFATFileSystem		m_FileSystem;
 
 	CBcmFrameBuffer	*m_pFrameBuffer;
 
 	static CKernel *s_pThis;
 	
+	u8 m_LastModifiers;
 	u8 m_LastRawKeys[6];
-	u8 m_InputBuffer[INPUT_BUFFER_SIZE];
+	InputEvent m_InputBuffer[INPUT_BUFFER_SIZE];
 	int m_InputBufferPos, m_InputBufferSize;
 };
 

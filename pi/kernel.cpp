@@ -22,6 +22,8 @@
 #include <circle/string.h>
 #include "../src/fake86/fake86.h"
 #include "../src/fake86/video.h"
+#include "keymap.h"
+#include "mmcdisk.h"
 
 #define PARTITION	"emmc1-1"
 #define FILENAME	"circle.txt"
@@ -31,20 +33,15 @@ CKernel *CKernel::s_pThis = 0;
 uint64_t CurrentTick = 0;
 uint64_t LastTimerSample = 0;
 
-enum
-{
-	RawKeyDown = 0,
-	RawKeyUp
-};
-
 CKernel::CKernel (void)
 :	m_Screen (256, 256, true),//(m_Options.GetWidth (), m_Options.GetHeight (), true),
 	m_Timer (&m_Interrupt),
 	m_Logger (m_Options.GetLogLevel (), &m_Timer),
 	m_DWHCI (&m_Interrupt, &m_Timer),
+	m_EMMC (&m_Interrupt, &m_Timer, &m_ActLED),
+	m_LastModifiers(0),
 	m_InputBufferPos(0),
 	m_InputBufferSize(0)	
-	//m_EMMC (&m_Interrupt, &m_Timer, &m_ActLED)
 {
 	s_pThis = this;
 	m_ActLED.Blink (5);	// show we are alive
@@ -147,12 +144,11 @@ boolean CKernel::Initialize (void)
 
 	if (bOK)
 	{
-		//bOK = m_EMMC.Initialize ();
+		bOK = m_EMMC.Initialize ();
 	}
 
 	LastTimerSample = CTimer::GetClockTicks();
 	
-	initfake86();
 
 	return bOK;
 }
@@ -247,12 +243,21 @@ TShutdownMode CKernel::Run (void)
 		m_Logger.Write (FromKernel, LogPanic, "Cannot close file");
 	}*/
 
+	initfake86();
+	
+	insertdisk(128, new MMCDisk(&m_EMMC));
+	//CDevice *pPartition = m_DeviceNameService.GetDevice (PARTITION, TRUE);
+	//if (pPartition)
+	//{
+	//	
+	//}
+
 	CUSBKeyboardDevice *pKeyboard = (CUSBKeyboardDevice *) m_DeviceNameService.GetDevice ("ukbd1", FALSE);
 	
 	if(pKeyboard)
 	{
-		//pKeyboard->RegisterKeyStatusHandlerRaw (KeyStatusHandlerRaw);
-			pKeyboard->RegisterKeyPressedHandler (KeyPressedHandler);
+		pKeyboard->RegisterKeyStatusHandlerRaw (KeyStatusHandlerRaw);
+		//	pKeyboard->RegisterKeyPressedHandler (KeyPressedHandler);
 	}
 	else return ShutdownHalt;
 	
@@ -304,17 +309,16 @@ TShutdownMode CKernel::Run (void)
 		
 		while(m_InputBufferSize > 0)
 		{
-			u8 eventType = m_InputBuffer[m_InputBufferPos++];
-			u8 keycode = m_InputBuffer[m_InputBufferPos++];
-			if(eventType == RawKeyDown)
+			if(m_InputBuffer[m_InputBufferPos].eventType == EventType::KeyPress)
 			{
-				handlekeydown(keycode);
+				handlekeydownraw(m_InputBuffer[m_InputBufferPos].scancode);
 			}
 			else
 			{
-				handlekeyupraw(keycode);
+				handlekeyupraw(m_InputBuffer[m_InputBufferPos].scancode);
 			}
-			m_InputBufferSize -= 2;
+			m_InputBufferPos++;
+			m_InputBufferSize --;
 			if(m_InputBufferPos >= INPUT_BUFFER_SIZE)
 			{
 				m_InputBufferPos = 0;
@@ -325,8 +329,35 @@ TShutdownMode CKernel::Run (void)
 	return ShutdownHalt;
 }
 
+void CKernel::QueueEvent(EventType eventType, u16 scancode)
+{
+	if(m_InputBufferSize < INPUT_BUFFER_SIZE && scancode != 0)
+	{
+		int writePos = (m_InputBufferPos + m_InputBufferSize) % INPUT_BUFFER_SIZE;
+		m_InputBuffer[writePos].eventType = eventType;
+		m_InputBuffer[writePos].scancode = scancode;
+		s_pThis->m_InputBufferSize ++;
+	}
+}
+
+
 void CKernel::KeyStatusHandlerRaw (unsigned char ucModifiers, const unsigned char RawKeys[6])
 {
+	for(int n = 0; n < 8; n++)
+	{
+		int mask = 1 << n;
+		bool wasPressed = (s_pThis->m_LastModifiers & mask) != 0;
+		bool isPressed = (ucModifiers & mask) != 0;
+		if(!wasPressed && isPressed)
+		{
+			s_pThis->QueueEvent(EventType::KeyPress, modifier2xtMapping[n]);
+		}
+		else if(wasPressed && !isPressed)
+		{
+			s_pThis->QueueEvent(EventType::KeyRelease, modifier2xtMapping[n]);
+		}
+	}
+		
 	for(int n = 0; n < 6; n++)
 	{
 		if(s_pThis->m_LastRawKeys[n] != 0)
@@ -344,10 +375,7 @@ void CKernel::KeyStatusHandlerRaw (unsigned char ucModifiers, const unsigned cha
 			
 			if(!inNewBuffer && s_pThis->m_InputBufferSize < INPUT_BUFFER_SIZE)
 			{
-				int writePos = (s_pThis->m_InputBufferPos + s_pThis->m_InputBufferSize) % INPUT_BUFFER_SIZE;
-				s_pThis->m_InputBuffer[writePos++] = RawKeyUp;
-				s_pThis->m_InputBuffer[writePos] = s_pThis->m_LastRawKeys[n];
-				s_pThis->m_InputBufferSize += 2;
+				s_pThis->QueueEvent(EventType::KeyRelease, usb2xtMapping[s_pThis->m_LastRawKeys[n]]);
 			}
 		}
 	}
@@ -369,10 +397,7 @@ void CKernel::KeyStatusHandlerRaw (unsigned char ucModifiers, const unsigned cha
 			
 			if(!inLastBuffer && s_pThis->m_InputBufferSize < INPUT_BUFFER_SIZE)
 			{
-				int writePos = (s_pThis->m_InputBufferPos + s_pThis->m_InputBufferSize) % INPUT_BUFFER_SIZE;
-				s_pThis->m_InputBuffer[writePos++] = RawKeyDown;
-				s_pThis->m_InputBuffer[writePos] = RawKeys[n];
-				s_pThis->m_InputBufferSize += 2;
+				s_pThis->QueueEvent(EventType::KeyPress, usb2xtMapping[RawKeys[n]]);
 			}
 		}
 	}
@@ -381,6 +406,8 @@ void CKernel::KeyStatusHandlerRaw (unsigned char ucModifiers, const unsigned cha
 	{
 		s_pThis->m_LastRawKeys[n] = RawKeys[n];
 	}
+
+	s_pThis->m_LastModifiers = ucModifiers;
 
 //	s_InputBuffer[n] = RawKeys[n];
 	
@@ -412,10 +439,7 @@ void CKernel::KeyPressedHandler (const char *pString)
 			
 			if(keycode == '\n')
 				keycode = 13;
-			int writePos = (s_pThis->m_InputBufferPos + s_pThis->m_InputBufferSize) % INPUT_BUFFER_SIZE;
-			s_pThis->m_InputBuffer[writePos++] = RawKeyDown;
-			s_pThis->m_InputBuffer[writePos++] = keycode;
-			s_pThis->m_InputBufferSize +=2 ;
+			s_pThis->QueueEvent(EventType::KeyPress, keycode);
 		}
 		else break;
 	}
