@@ -111,7 +111,7 @@ void initRAM()
 		log("OK - %x -> %x", &readonlyflag, readonlyflag);
 	}
 	log("Alloc port ram");
-	portram = allocmem(RAM_SIZE);
+	portram = allocmem(PORT_RAM_SIZE);
 	if (portram) {
 		log("OK");
 	}
@@ -122,24 +122,15 @@ void initRAM()
 	}
 
 	log("Alloc port callbacks");
-	port_read_callback = (read_redirector*) allocmem(RAM_SIZE * sizeof(read_redirector));
-	port_write_callback = (write_redirector*)allocmem(RAM_SIZE * sizeof(write_redirector));
-	port_read_callback16 = (read_redirector_16*)allocmem(RAM_SIZE * sizeof(read_redirector_16));
-	port_write_callback16 = (write_redirector_16*)allocmem(RAM_SIZE * sizeof(write_redirector_16));
+	const int numPorts = PORT_RAM_SIZE;
+	port_read_callback = (read_redirector*) allocmem(numPorts * sizeof(read_redirector));
+	port_write_callback = (write_redirector*)allocmem(numPorts * sizeof(write_redirector));
+	port_read_callback16 = (read_redirector_16*)allocmem(numPorts * sizeof(read_redirector_16));
+	port_write_callback16 = (write_redirector_16*)allocmem(numPorts * sizeof(write_redirector_16));
 	if (port_read_callback && port_write_callback && port_read_callback16 && port_write_callback16) {
 		log("OK");
 	}
 
-
-	log("Nulling callbacks");
-	clearmem(port_write_callback, RAM_SIZE);
-	clearmem(port_read_callback, RAM_SIZE);
-	clearmem(port_write_callback16, RAM_SIZE);
-	clearmem(port_read_callback16, RAM_SIZE);
-
-
-	log("Setting memory to read only");
-	clearmem(readonlyflag, RAM_SIZE);
 	log("Done!");
 }
 

@@ -41,6 +41,9 @@ extern void tickssource();
 extern void tickadlib();
 extern void tickBlaster();
 
+extern uint64_t gethostfreq();
+extern uint64_t gettick();
+
 uint64_t hostfreq = 1000000, lasttick = 0, curtick = 0, tickgap, i8253tickgap, lasti8253tick, scanlinetiming, lastscanlinetick, curscanline = 0;
 uint64_t sampleticks, lastsampletick, ssourceticks, lastssourcetick, adlibticks, lastadlibtick, lastblastertick, gensamplerate;
 
@@ -51,8 +54,8 @@ extern uint8_t port3da, doaudio;
 
 void inittiming() {
 #if 1	// TODO
-	hostfreq = 1000;
-	curtick = 0;
+	hostfreq = gethostfreq();
+	curtick = gettick();
 #elif defined(_WIN32)
 	QueryPerformanceFrequency (&queryperf);
 	hostfreq = queryperf.QuadPart;
@@ -76,7 +79,7 @@ void timing() {
 	uint8_t i8253chan;
 
 #if 1	// TODO
-	curtick++;
+	curtick = gettick();
 #elif defined(_WIN32)
 	QueryPerformanceCounter (&queryperf);
 	curtick = queryperf.QuadPart;

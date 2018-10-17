@@ -11,3 +11,6 @@ void getactivepalette(uint8_t** palette, int* paletteSize);
 
 void handlekeydown(uint16_t scancode);
 void handlekeyup(uint16_t scancode);
+void handlekeydownraw(uint8_t scancode);
+void handlekeyupraw(uint8_t scancode);
+

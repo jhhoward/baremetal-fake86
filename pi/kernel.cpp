@@ -28,13 +28,22 @@
 
 static const char FromKernel[] = "kernel";
 CKernel *CKernel::s_pThis = 0;
-u8 CKernel::s_InputBuffer[6];
+uint64_t CurrentTick = 0;
+uint64_t LastTimerSample = 0;
+
+enum
+{
+	RawKeyDown = 0,
+	RawKeyUp
+};
 
 CKernel::CKernel (void)
 :	m_Screen (256, 256, true),//(m_Options.GetWidth (), m_Options.GetHeight (), true),
 	m_Timer (&m_Interrupt),
 	m_Logger (m_Options.GetLogLevel (), &m_Timer),
-	m_DWHCI (&m_Interrupt, &m_Timer)
+	m_DWHCI (&m_Interrupt, &m_Timer),
+	m_InputBufferPos(0),
+	m_InputBufferSize(0)	
 	//m_EMMC (&m_Interrupt, &m_Timer, &m_ActLED)
 {
 	s_pThis = this;
@@ -53,28 +62,48 @@ void log(const char* message, ...)
 	va_end(myargs);
 }
 
+uint64_t gethostfreq()
+{
+	return CLOCKHZ;
+}
+
+uint64_t gettick()
+{
+	uint32_t timerSample = CTimer::GetClockTicks();
+	uint32_t delta = timerSample >= LastTimerSample ? (timerSample - LastTimerSample) : (0xffffffff - LastTimerSample) + timerSample;
+	LastTimerSample = timerSample;
+	CurrentTick += delta;
+	return CurrentTick;
+}
+
+extern uint32_t palettecga[16];
+
 boolean CKernel::Initialize (void)
 {
 	boolean bOK = TRUE;
 	
 	m_pFrameBuffer = new CBcmFrameBuffer (OUTPUT_DISPLAY_WIDTH, OUTPUT_DISPLAY_HEIGHT, 8);
     
-	m_pFrameBuffer->SetPalette (0, 0x0000);  // black
-	m_pFrameBuffer->SetPalette (1, 0x0010);  // blue
-	m_pFrameBuffer->SetPalette (2, 0x8000);  // red
-	m_pFrameBuffer->SetPalette (3, 0x8010);  // magenta
-	m_pFrameBuffer->SetPalette (4, 0x0400);  // green
-	m_pFrameBuffer->SetPalette (5, 0x0410);  // cyan
-	m_pFrameBuffer->SetPalette (6, 0x8400);  // yellow
-	m_pFrameBuffer->SetPalette (7, 0x8410);  // white
-	m_pFrameBuffer->SetPalette (8, 0x0000);  // black
-	m_pFrameBuffer->SetPalette (9, 0x001F);  // bright blue
-	m_pFrameBuffer->SetPalette (10, 0xF800); // bright red
-	m_pFrameBuffer->SetPalette (11, 0xF81F); // bright magenta
-	m_pFrameBuffer->SetPalette (12, 0x07E0); // bright green
-	m_pFrameBuffer->SetPalette (13, 0x07FF); // bright cyan
-	m_pFrameBuffer->SetPalette (14, 0xFFE0); // bright yellow
-	m_pFrameBuffer->SetPalette (15, 0xFFFF); // bright white
+	for(int n = 0; n < 16; n++)
+	{
+		m_pFrameBuffer->SetPalette32 (n, palettecga[n]);  
+	}
+	//m_pFrameBuffer->SetPalette (0, 0x0000);  // black
+	//m_pFrameBuffer->SetPalette (1, 0x0010);  // blue
+	//m_pFrameBuffer->SetPalette (2, 0x8000);  // red
+	//m_pFrameBuffer->SetPalette (3, 0x8010);  // magenta
+	//m_pFrameBuffer->SetPalette (4, 0x0400);  // green
+	//m_pFrameBuffer->SetPalette (5, 0x0410);  // cyan
+	//m_pFrameBuffer->SetPalette (6, 0x8400);  // yellow
+	//m_pFrameBuffer->SetPalette (7, 0x8410);  // white
+	//m_pFrameBuffer->SetPalette (8, 0x0000);  // black
+	//m_pFrameBuffer->SetPalette (9, 0x001F);  // bright blue
+	//m_pFrameBuffer->SetPalette (10, 0xF800); // bright red
+	//m_pFrameBuffer->SetPalette (11, 0xF81F); // bright magenta
+	//m_pFrameBuffer->SetPalette (12, 0x07E0); // bright green
+	//m_pFrameBuffer->SetPalette (13, 0x07FF); // bright cyan
+	//m_pFrameBuffer->SetPalette (14, 0xFFE0); // bright yellow
+	//m_pFrameBuffer->SetPalette (15, 0xFFFF); // bright white
 
 	if (!m_pFrameBuffer->Initialize()) {
 		return FALSE;
@@ -95,7 +124,7 @@ boolean CKernel::Initialize (void)
 		CDevice *pTarget = m_DeviceNameService.GetDevice (m_Options.GetLogDevice (), FALSE);
 		if (pTarget == 0)
 		{
-			//pTarget = &m_Screen;
+			pTarget = &m_Screen;
 		}
 
 		bOK = m_Logger.Initialize (pTarget);
@@ -113,8 +142,15 @@ boolean CKernel::Initialize (void)
 
 	if (bOK)
 	{
+		bOK = m_DWHCI.Initialize ();
+	}
+
+	if (bOK)
+	{
 		//bOK = m_EMMC.Initialize ();
 	}
+
+	LastTimerSample = CTimer::GetClockTicks();
 	
 	initfake86();
 
@@ -217,31 +253,43 @@ TShutdownMode CKernel::Run (void)
 	{
 		//pKeyboard->RegisterKeyStatusHandlerRaw (KeyStatusHandlerRaw);
 			pKeyboard->RegisterKeyPressedHandler (KeyPressedHandler);
-
 	}
+	else return ShutdownHalt;
 	
 	char screentext[80*25+1];
 	int cursorX, cursorY;
 	int firstRow = 5;
 	int count = 0;
+	uint32_t lastRefreshTime = CTimer::GetClockTicks();
+	const int refreshRate = 60;
+	const int refreshDelay = CLOCKHZ / refreshRate;
 	
 	while(simulatefake86())
 	{
 		if(pKeyboard)
 			pKeyboard->UpdateLEDs ();
-
-		uint32_t* palettePtr;
-		int paletteSize;
 		
-		getactivepalette((uint8_t**)&palettePtr, &paletteSize);
+		// TODO: This should really be based on screen refresh rate / vsync interrupt
+		uint32_t currentTime = CTimer::GetClockTicks();
+		uint32_t timeElapsedSinceRefresh = (currentTime >= lastRefreshTime) ? (currentTime - lastRefreshTime) : (0xffffffff - lastRefreshTime) + (currentTime);
 		
-		for(int n = 0; n < paletteSize; n++)
+		if(timeElapsedSinceRefresh >= refreshDelay)
 		{
-			m_pFrameBuffer->SetPalette (n, palettePtr[n]);
+			uint32_t* palettePtr;
+			int paletteSize;
+			
+			getactivepalette((uint8_t**)&palettePtr, &paletteSize);
+			
+			for(int n = 0; n < paletteSize; n++)
+			{
+				m_pFrameBuffer->SetPalette32 (n, palettePtr[n]);
+			}
+			m_pFrameBuffer->UpdatePalette();
+			
+			drawfake86((uint8_t*) m_pFrameBuffer->GetBuffer());
+			lastRefreshTime = currentTime;
+			//m_Timer.MsDelay (1);
 		}
-		m_pFrameBuffer->UpdatePalette();
-		
-		drawfake86((uint8_t*) m_pFrameBuffer->GetBuffer());
 		//m_Screen.CursorMove(firstRow, 0);
 		/*count++;
 		
@@ -254,12 +302,22 @@ TShutdownMode CKernel::Run (void)
 			m_Timer.MsDelay (100);
 		}*/
 		
-		for(int n = 0; n < 6; n++)
+		while(m_InputBufferSize > 0)
 		{
-			if(s_InputBuffer[n] != 0)
+			u8 eventType = m_InputBuffer[m_InputBufferPos++];
+			u8 keycode = m_InputBuffer[m_InputBufferPos++];
+			if(eventType == RawKeyDown)
 			{
-				handlekeydown(s_InputBuffer[n]);
-				s_InputBuffer[n] = 0;
+				handlekeydown(keycode);
+			}
+			else
+			{
+				handlekeyupraw(keycode);
+			}
+			m_InputBufferSize -= 2;
+			if(m_InputBufferPos >= INPUT_BUFFER_SIZE)
+			{
+				m_InputBufferPos = 0;
 			}
 		}
 	}
@@ -271,8 +329,61 @@ void CKernel::KeyStatusHandlerRaw (unsigned char ucModifiers, const unsigned cha
 {
 	for(int n = 0; n < 6; n++)
 	{
-		s_InputBuffer[n] = RawKeys[n];
+		if(s_pThis->m_LastRawKeys[n] != 0)
+		{
+			bool inNewBuffer = false;
+			
+			for(int i = 0; i < 6; i++)
+			{
+				if(s_pThis->m_LastRawKeys[n] == RawKeys[i])
+				{
+					inNewBuffer = true;
+					break;
+				}
+			}
+			
+			if(!inNewBuffer && s_pThis->m_InputBufferSize < INPUT_BUFFER_SIZE)
+			{
+				int writePos = (s_pThis->m_InputBufferPos + s_pThis->m_InputBufferSize) % INPUT_BUFFER_SIZE;
+				s_pThis->m_InputBuffer[writePos++] = RawKeyUp;
+				s_pThis->m_InputBuffer[writePos] = s_pThis->m_LastRawKeys[n];
+				s_pThis->m_InputBufferSize += 2;
+			}
+		}
 	}
+
+	for(int n = 0; n < 6; n++)
+	{
+		if(RawKeys[n] != 0)
+		{
+			bool inLastBuffer = false;
+			
+			for(int i = 0; i < 6; i++)
+			{
+				if(s_pThis->m_LastRawKeys[i] == RawKeys[n])
+				{
+					inLastBuffer = true;
+					break;
+				}
+			}
+			
+			if(!inLastBuffer && s_pThis->m_InputBufferSize < INPUT_BUFFER_SIZE)
+			{
+				int writePos = (s_pThis->m_InputBufferPos + s_pThis->m_InputBufferSize) % INPUT_BUFFER_SIZE;
+				s_pThis->m_InputBuffer[writePos++] = RawKeyDown;
+				s_pThis->m_InputBuffer[writePos] = RawKeys[n];
+				s_pThis->m_InputBufferSize += 2;
+			}
+		}
+	}
+
+	for(int n = 0; n < 6; n++)
+	{
+		s_pThis->m_LastRawKeys[n] = RawKeys[n];
+	}
+
+//	s_InputBuffer[n] = RawKeys[n];
+	
 	//assert (s_pThis != 0);
     //
 	//CString Message;
@@ -293,13 +404,20 @@ void CKernel::KeyStatusHandlerRaw (unsigned char ucModifiers, const unsigned cha
 
 void CKernel::KeyPressedHandler (const char *pString)
 {
-	//assert (s_pThis != 0);
-	for(int n = 0; n < 6; n++)
+	for(int n = 0; n < INPUT_BUFFER_SIZE && s_pThis->m_InputBufferSize < INPUT_BUFFER_SIZE; n++)
 	{
 		if(pString[n])
 		{
-			s_InputBuffer[n] = pString[n];
+			u8 keycode = pString[n];
+			
+			if(keycode == '\n')
+				keycode = 13;
+			int writePos = (s_pThis->m_InputBufferPos + s_pThis->m_InputBufferSize) % INPUT_BUFFER_SIZE;
+			s_pThis->m_InputBuffer[writePos++] = RawKeyDown;
+			s_pThis->m_InputBuffer[writePos++] = keycode;
+			s_pThis->m_InputBufferSize +=2 ;
 		}
+		else break;
 	}
 	//s_pThis->m_Screen.Write (pString, strlen (pString));
 }

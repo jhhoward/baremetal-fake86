@@ -26,17 +26,9 @@ void setmem(void* dest, int value, uint32_t n)
 
 uint8_t* allocmem(uint32_t size)
 {
-	uint8_t* result = (uint8_t*)malloc(size);// new uint8_t[size];
-	log("Allocated %d bytes at 0x%x", size, result);
-	for (uint32_t n = 0; n < size; n++)
-	{
-		if ((n % 1024) == 0)
-		{
-		//	log("Clearing %d / %d @ 0x%x", n, size, result + n);
-		}
-		result[n] = 0;
-	}
-	//setmem(result, 0, size);
+	uint8_t* result = new uint8_t[size];
+	//log("Allocated %d bytes at 0x%x", size, result);
+	setmem(result, 0, size);
 	return result;
 }
 

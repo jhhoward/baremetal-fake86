@@ -35,6 +35,8 @@
 #include <circle/types.h>
 #include <circle/usb/dwhcidevice.h>
 
+#define INPUT_BUFFER_SIZE 16
+
 enum TShutdownMode
 {
 	ShutdownNone,
@@ -76,8 +78,10 @@ private:
 	CBcmFrameBuffer	*m_pFrameBuffer;
 
 	static CKernel *s_pThis;
-	static u8 s_InputBuffer[6];
 	
+	u8 m_LastRawKeys[6];
+	u8 m_InputBuffer[INPUT_BUFFER_SIZE];
+	int m_InputBufferPos, m_InputBufferSize;
 };
 
 #endif
