@@ -73,9 +73,49 @@ uint8_t insertdisk (uint8_t drivenum, char *filename) {
 
 void insertembeddeddisk(uint8_t drivenum, uint8_t* data, uint32_t size)
 {
+	insertdisk(drivenum, new EmbeddedDisk(data, size));
+	/*
 	disk[drivenum].inserted = 1;
-	disk[drivenum].embedded = data;
+	//disk[drivenum].embedded = data;
+	disk[drivenum].disk = new EmbeddedDisk(data, size);
 	disk[drivenum].filesize = size;
+
+	if (drivenum >= 0x80) { //it's a hard disk image
+		disk[drivenum].sects = 63;
+		disk[drivenum].heads = 16;
+		disk[drivenum].cyls = disk[drivenum].filesize / (disk[drivenum].sects * disk[drivenum].heads * 512);
+		hdcount++;
+	}
+	else {   //it's a floppy image
+		disk[drivenum].cyls = 80;
+		disk[drivenum].sects = 18;
+		disk[drivenum].heads = 2;
+		if (disk[drivenum].filesize <= 1228800) disk[drivenum].sects = 15;
+		if (disk[drivenum].filesize <= 737280) disk[drivenum].sects = 9;
+		if (disk[drivenum].filesize <= 368640) {
+			disk[drivenum].cyls = 40;
+			disk[drivenum].sects = 9;
+		}
+		if (disk[drivenum].filesize <= 163840) {
+			disk[drivenum].cyls = 40;
+			disk[drivenum].sects = 8;
+			disk[drivenum].heads = 1;
+		}
+	}
+	*/
+}
+
+void insertdisk(uint8_t drivenum, DiskInterface* newDisk)
+{
+	if (disk[drivenum].inserted)
+	{
+		ejectdisk(drivenum);
+	}
+
+	disk[drivenum].inserted = 1;
+	//disk[drivenum].embedded = data;
+	disk[drivenum].disk = newDisk;
+	disk[drivenum].filesize = newDisk->getSize();
 
 	if (drivenum >= 0x80) { //it's a hard disk image
 		disk[drivenum].sects = 63;
@@ -103,7 +143,12 @@ void insertembeddeddisk(uint8_t drivenum, uint8_t* data, uint32_t size)
 
 void ejectdisk (uint8_t drivenum) {
 	disk[drivenum].inserted = 0;
-	disk[drivenum].embedded = 0;
+	if(disk[drivenum].disk)
+	{
+		delete disk[drivenum].disk;
+		disk[drivenum].disk = nullptr;
+	}
+	//disk[drivenum].embedded = 0;
 #if 0
 	if (disk[drivenum].diskfile != nullptr) fclose (disk[drivenum].diskfile);
 #endif
@@ -134,7 +179,22 @@ void readdisk (uint8_t drivenum, uint16_t dstseg, uint16_t dstoff, uint16_t cyl,
 	else 
 #endif
 
-	if(disk[drivenum].embedded)
+	if(disk[drivenum].disk)
+	{
+		disk[drivenum].disk->seek(fileoffset);
+		memdest = ((uint32_t)dstseg << 4) + (uint32_t)dstoff;
+		//for the readdisk function, we need to use write86 instead of directly fread'ing into
+		//the RAM array, so that read-only flags are honored. otherwise, a program could load
+		//data from a disk over BIOS or other ROM code that it shouldn't be able to.
+		for (cursect = 0; cursect<sectcount; cursect++) {
+			if (disk[drivenum].disk->read(sectorbuffer, 512) < 512) break;
+			for (sectoffset = 0; sectoffset<512; sectoffset++) {
+				write86(memdest++, sectorbuffer[sectoffset]);
+			}
+		}
+	}
+
+	/*if(disk[drivenum].embedded)
 	{
 		memdest = ((uint32_t)dstseg << 4) + (uint32_t)dstoff;
 		uint32_t readpos = fileoffset;
@@ -146,7 +206,7 @@ void readdisk (uint8_t drivenum, uint16_t dstseg, uint16_t dstoff, uint16_t cyl,
 				write86(memdest++, disk[drivenum].embedded[readpos++]);
 			}
 		}
-	}
+	}*/
 
 	regs.byteregs[regal] = cursect;
 	cf = 0;
@@ -175,7 +235,19 @@ void writedisk (uint8_t drivenum, uint16_t dstseg, uint16_t dstoff, uint16_t cyl
 	else 
 #endif
 		
-	if (disk[drivenum].embedded)
+	if (disk[drivenum].disk)
+	{
+		disk[drivenum].disk->seek(fileoffset);
+		memdest = ((uint32_t)dstseg << 4) + (uint32_t)dstoff;
+		for (cursect = 0; cursect < sectcount; cursect++) {
+			for (sectoffset = 0; sectoffset < 512; sectoffset++) {
+				sectorbuffer[sectoffset] = read86(memdest++);
+			}
+			disk[drivenum].disk->write(sectorbuffer, 512);
+		}
+	}
+
+/*	if (disk[drivenum].embedded)
 	{
 		uint32_t writepos = fileoffset;
 		memdest = ((uint32_t)dstseg << 4) + (uint32_t)dstoff;
@@ -185,7 +257,7 @@ void writedisk (uint8_t drivenum, uint16_t dstseg, uint16_t dstoff, uint16_t cyl
 			}
 		}
 
-	}
+	}*/
 
 	regs.byteregs[regal] = (uint8_t) sectcount;
 	cf = 0;
@@ -256,4 +328,38 @@ void diskhandler() {
 	lastdiskah[regs.byteregs[regdl]] = regs.byteregs[regah];
 	lastdiskcf[regs.byteregs[regdl]] = cf;
 	if (regs.byteregs[regdl] & 0x80) RAM[0x474] = regs.byteregs[regah];
+}
+
+int EmbeddedDisk::read (uint8_t *buffer, unsigned count)
+{
+	int bytesRead = 0;
+	
+	while(position < length && count)
+	{
+		*buffer++ = data[position++];
+		count--;
+		bytesRead++;
+	}
+	
+	return bytesRead;
+}
+
+int EmbeddedDisk::write (const uint8_t *buffer, unsigned count)
+{
+	int bytesWritten = 0;
+	
+	while(position < length && count)
+	{
+		data[position++] = *buffer++;
+		count--;
+		bytesWritten++;
+	}
+	
+	return bytesWritten;
+}
+
+uint64_t EmbeddedDisk::seek (uint64_t offset)
+{
+	position = offset;
+	return position;
 }

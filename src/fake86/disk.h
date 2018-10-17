@@ -20,8 +20,38 @@
 #pragma once
 #include "types.h"
 
+class DiskInterface
+{
+public:
+	virtual ~DiskInterface() {}
+	virtual int read (uint8_t *buffer, unsigned count) = 0;
+	virtual int write (const uint8_t *buffer, unsigned count) = 0;
+
+	virtual uint64_t seek (uint64_t offset) = 0;
+	virtual uint64_t getSize() = 0;
+};
+
+class EmbeddedDisk : public DiskInterface
+{
+public:
+	EmbeddedDisk(uint8_t* inData, uint64_t inLength) :
+		data(inData), length(inLength), position(0) {}
+	
+	virtual int read (uint8_t *buffer, unsigned count) override;
+	virtual int write (const uint8_t *buffer, unsigned count) override;
+
+	virtual uint64_t seek (uint64_t offset) override;
+	virtual uint64_t getSize() override { return length; }
+
+private:
+	uint8_t* data;
+	uint64_t length;	
+	uint64_t position;
+};
+
 struct struct_drive {
-	uint8_t* embedded;
+	DiskInterface* disk;
+	//uint8_t* embedded;
 //	FILE *diskfile;
 	uint32_t filesize;
 	uint16_t cyls;
@@ -32,3 +62,5 @@ struct struct_drive {
 };
 
 void insertembeddeddisk(uint8_t drivenum, uint8_t* data, uint32_t size);
+void insertdisk(uint8_t drivenum, DiskInterface* disk);
+void ejectdisk(uint8_t drivenum);
