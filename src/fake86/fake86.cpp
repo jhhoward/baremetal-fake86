@@ -173,6 +173,8 @@ void initfake86()
 	log("Inserting boot disk\n");
 	insertembeddeddisk(0, dosboot, sizeof(dosboot));
 
+	insertembeddeddisk(0x80, dosboot, sizeof(dosboot));
+
 	log("Loading BIOS\n");
 	loadembeddedrom(0xFE000UL, pcxtbios, sizeof(pcxtbios));
 	log("Loading video ROM\n");
@@ -192,6 +194,8 @@ void initfake86()
 	log("OK!\n");
 
 	inithardware();
+
+
 }
 
 bool simulatefake86()

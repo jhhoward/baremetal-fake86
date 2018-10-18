@@ -21,12 +21,13 @@
    and handling of SDL events in general. */
 
 #include "sermouse.h"
+#include "cpu.h"
 
 uint8_t keydown[0x100], keyboardwaitack = 0;
 extern uint32_t usegrabmode;
 
 extern void doirq (uint8_t irqnum);
-extern uint8_t running, portram[0x10000];
+extern uint8_t running;
 
 uint8_t translatescancode (uint16_t keyval) {
 	switch (keyval) {
@@ -283,6 +284,34 @@ void handlekeyup(uint16_t scancode)
 	portram[0x60] = translatescancode (scancode) | 0x80;
 	portram[0x64] |= 2;
 	doirq (1);
+}
+
+void handlekeydownraw(uint16_t scancode)
+{
+	uint8_t extension = (uint8_t)(scancode >> 8);
+	if (extension)
+	{
+		portram[0x60] = extension;
+		portram[0x64] |= 2;
+		doirq(1);
+	}
+	portram[0x60] = (uint8_t)scancode;
+	portram[0x64] |= 2;
+	doirq(1);
+}
+
+void handlekeyupraw(uint16_t scancode)
+{
+	uint8_t extension = (uint8_t)(scancode >> 8);
+	if (extension)
+	{
+		portram[0x60] = extension;
+		portram[0x64] |= 2;
+		doirq(1);
+	}
+	portram[0x60] = (uint8_t)scancode | 0x80;
+	portram[0x64] |= 2;
+	doirq(1);
 }
 
 #ifdef _WIN32

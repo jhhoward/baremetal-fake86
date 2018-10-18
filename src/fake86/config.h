@@ -20,6 +20,7 @@
 #define OUTPUT_DISPLAY_HEIGHT 400
 
 #define RAM_SIZE 0x100000
+#define PORT_RAM_SIZE 0x10000				   
 #define VRAM_SIZE 262144
 
 //#define DEBUG_BLASTER

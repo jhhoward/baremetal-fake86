@@ -55,6 +55,8 @@ void dumpscreenpng()
 	free(png);
 }
 
+int pressedKeys[256];
+
 int main(int argc, char *argv[])
 {
 	int count = 0;
@@ -66,10 +68,29 @@ int main(int argc, char *argv[])
 	{
 		screendirty |= drawfake86(blitbuffer);
 
+		for (int n = 8; n < 256; n++)
+		{
+			UINT state = GetAsyncKeyState(n);
+			bool pressed = (state & (1u << 31));
+			UINT scancode = MapVirtualKeyA(n, MAPVK_VK_TO_VSC);
+			char charcode = MapVirtualKeyA(n, MAPVK_VK_TO_CHAR);
+
+			if(!pressedKeys[n] && pressed)
+			{
+				//printf("Pressed %x [%c] V: %x\n", scancode, charcode, n);
+				handlekeydownraw(scancode);
+			}
+			else if (pressedKeys[n] && !pressed)
+			{
+				//printf("Released %x [%c] V: %x\n", scancode, charcode, n);
+				handlekeyupraw(scancode);
+			}
+			pressedKeys[n] = pressed ? 1 : 0;
+		}
 		if (_kbhit()) 
 		{
 			char c = _getch();
-			handlekeydown(c);
+		//	handlekeydown(c);
 		}
 		
 		count++;
@@ -79,7 +100,7 @@ int main(int argc, char *argv[])
 			count = 0;
 			screendirty = false;
 			dumpscreen();
-			dumpscreenpng();
+			//dumpscreenpng();
 		}
 	}
 
@@ -93,3 +114,30 @@ void log(const char* message, ...)
 	vprintf(message, myargs);
 	va_end(myargs);
 }
+
+#if 1
+uint64_t gethostfreq()
+{
+	return 1000;
+}
+
+uint64_t gettick()
+{
+	static uint64_t tick = 0;
+	return tick++;
+}
+#else
+LARGE_INTEGER queryperf;
+
+uint64_t gethostfreq()
+{
+	QueryPerformanceFrequency(&queryperf);
+	return queryperf.QuadPart;
+}
+
+uint64_t gettick()
+{
+	QueryPerformanceCounter(&queryperf);
+	return queryperf.QuadPart;
+}
+#endif
