@@ -25,6 +25,7 @@
 #include "config.h"
 #include "render.h"
 #include "cpu.h"
+#include "fake86.h"
 
 //uint32_t *scalemap = nullptr;
 uint32_t scalemap[(OUTPUT_DISPLAY_WIDTH + 1) * OUTPUT_DISPLAY_HEIGHT * 4];
@@ -105,6 +106,8 @@ void createscalemap() {
 extern uint16_t oldw, oldh, constantw, constanth;
 void draw();
 extern void handleinput();
+
+uint64_t cursorprevtick;
 
 void VideoThread (void *dummy) {
 #if 0
@@ -311,8 +314,8 @@ void doubleblit (SDL_Surface *target) {
 
 extern uint16_t vtotal;
 void draw () {
-	if (!updatedscreen)
-		return;
+//	if (!updatedscreen)
+//		return;
 
 	uint32_t planemode, vgapage, /*color,*/ chary, charx, vidptr, divx, divy, curchar, curpixel, usepal, intensity, blockw, curheight, x1, y1;
 	uint8_t color;
@@ -349,8 +352,8 @@ void draw () {
 									color = fontcga[curchar*128 + (y%16) *8 + ( (x/divx) %8) ];
 								}
 							if (vidcolor) {
-									if (!color) if (portram[0x3D8]&128) color = (RAM[vidptr+1]/16) &7;
-										else color = RAM[vidptr+1]/16; //high intensity background
+									/*if (!color) if (portram[0x3D8]&128) color = palettecga[ (RAM[vidptr+1]/16) &7];
+										else*/ if (!color) color = RAM[vidptr+1]/16; //high intensity background
 									else color = RAM[vidptr+1]&15;
 								}
 							else {
@@ -409,14 +412,15 @@ void draw () {
 			case 6:
 				nw = 640;
 				nh = 200;
-				for (y=0; y<200; y++) {
+				for (y=0; y<400; y+=2) {
 						for (x=0; x<640; x++) {
 								charx = x;
-								chary = y;
+								chary = y >> 1;
 								vidptr = videobase + ( (chary>>1) * 80) + ( (chary&1) * 8192) + (charx>>3);
 								curpixel = (RAM[vidptr]>> (7- (charx&7) ) ) &1;
 								color = curpixel*15;
 								prestretch[y][x] = color;
+								prestretch[y+1][x] = color;
 							}
 					}
 				break;
@@ -487,9 +491,9 @@ void draw () {
 							vidptr = y*80 + (x>>3);
 							x1 = 7 - (x & 7);
 							color = (VRAM[vidptr] >> x1) & 1;
-							color += ( ( (VRAM[0x10000 + vidptr] >> x1) & 1) << 1);
-							color += ( ( (VRAM[0x20000 + vidptr] >> x1) & 1) << 2);
-							color += ( ( (VRAM[0x30000 + vidptr] >> x1) & 1) << 3);
+							color |= ( ( (VRAM[0x10000 + vidptr] >> x1) & 1) << 1);
+							color |= ( ( (VRAM[0x20000 + vidptr] >> x1) & 1) << 2);
+							color |= ( ( (VRAM[0x30000 + vidptr] >> x1) & 1) << 3);
 							//color = palettevga[color];
 							prestretch[y][x] = color;
 						}
@@ -520,10 +524,12 @@ void draw () {
 					}
 				if (VGA_SC[4] & 6) planemode = 1;
 				else planemode = 0;
-				vgapage = ( (uint32_t) VGA_CRTC[0xC]<<8) + (uint32_t) VGA_CRTC[0xD];
+				//vgapage = ( (uint32_t) VGA_CRTC[0xC]<<8) + (uint32_t) VGA_CRTC[0xD];
+				vgapage = (( (uint32_t) VGA_CRTC[0xC]<<8) + (uint32_t) VGA_CRTC[0xD]) << 2;
 				for (y=0; y<nh; y++)
 					for (x=0; x<nw; x++) {
-							if (!planemode) color = RAM[videobase + y*nw + x];
+							if (!planemode) color = RAM[videobase + ((vgapage + y*nw + x) & 0xFFFF) ];
+							//if (!planemode) color = palettevga[RAM[videobase + y*nw + x]];
 							else {
 									vidptr = y*nw + x;
 									vidptr = vidptr/4 + (x & 3) *0x10000;
@@ -560,8 +566,16 @@ void draw () {
 
 bool blitscreen(uint8_t* screenbuffer)
 {
-	if (!updatedscreen)
-		return false;
+	uint64_t cursorcurtick = gettick();
+	uint64_t blinkRate = gethostfreq() / 16;
+	if ( (cursorcurtick - cursorprevtick) >= blinkRate) {
+		updatedscreen = 1;
+		cursorvisible = ~cursorvisible & 1;
+		cursorprevtick = cursorcurtick;
+	}
+	
+	//if (!updatedscreen)
+	//	return false;
 
 	uint32_t srcx, srcy, dstx, dsty, scalemapptr;
 	int32_t ofs;

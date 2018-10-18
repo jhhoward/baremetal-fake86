@@ -14,3 +14,5 @@ void handlekeyup(uint16_t scancode);
 void handlekeydownraw(uint16_t scancode);
 void handlekeyupraw(uint16_t scancode);
 
+extern uint64_t gethostfreq();
+extern uint64_t gettick();

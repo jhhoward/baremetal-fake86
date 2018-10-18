@@ -20,6 +20,7 @@
 #pragma once
 #include "types.h"
 
+
 struct dmachan_s {
 	uint32_t page;
 	uint32_t addr;

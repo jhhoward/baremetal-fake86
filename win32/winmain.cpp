@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include "../src/fake86/fake86.h"
 #include "../src/fake86/video.h"
+#include "../src/fake86/disk.h"
 #include "lodepng.h"
 
 uint8_t blitbuffer[OUTPUT_DISPLAY_WIDTH * OUTPUT_DISPLAY_HEIGHT];
@@ -64,6 +65,16 @@ int main(int argc, char *argv[])
 
 	initfake86();
 
+	if (argc == 2)
+	{
+		ImagedDisk* disk = new ImagedDisk(argv[1]);
+		if (disk->getSize() > 0)
+		{
+			insertdisk(128, disk);
+		}
+		else delete disk;
+	}
+
 	while (simulatefake86()) 
 	{
 		screendirty |= drawfake86(blitbuffer);
@@ -100,7 +111,7 @@ int main(int argc, char *argv[])
 			count = 0;
 			screendirty = false;
 			dumpscreen();
-			//dumpscreenpng();
+			dumpscreenpng();
 		}
 	}
 

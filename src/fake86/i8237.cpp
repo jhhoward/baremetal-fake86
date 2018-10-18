@@ -110,6 +110,13 @@ uint8_t in8237 (uint16_t addr) {
 #ifdef DEBUG_DMA
 	printf ("in8237(0x%X);\n", addr);
 #endif
+	switch (addr) {
+		case 3:
+			if (flipflop == 1) return(dmachan[1].reload >> 8);
+			else return(dmachan[1].reload);
+			flipflop = ~flipflop & 1;
+			break;
+	}
 	return (0);
 }
 

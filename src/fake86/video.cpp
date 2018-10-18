@@ -686,15 +686,16 @@ uint8_t inVGA (uint16_t portnum) {
 	}\
 }
 
-uint8_t lastmode = 0;
+uint8_t lastmode = 0, tempvalue;
 void writeVGA (uint32_t addr32, uint8_t value) {
 	uint32_t planesize;
 	uint8_t curval, tempand, cnt;
 	updatedscreen = 1;
 	planesize = 0x10000;
-	shiftVGA (value);
+
 	switch (VGA_GC[5] & 3) { //get write mode
 			case 0:
+				shiftVGA (value);
 				if (VGA_SC[2] & 1) {
 						if (VGA_GC[1] & 1)
 							if (VGA_GC[0] & 1) curval = 255;
@@ -778,31 +779,28 @@ void writeVGA (uint32_t addr32, uint8_t value) {
 				break;
 			case 3:
 				tempand = value & VGA_GC[8];
+				shiftVGA (value);
 				if (VGA_SC[2] & 1) {
 						if (VGA_GC[0] & 1) curval = 255;
 						else curval = 0;
-						logicVGA (curval, VGA_latch[0]);
 						curval = (~tempand & curval) | (tempand & VGA_latch[0]);
 						VRAM[addr32] = curval;
 					}
 				if (VGA_SC[2] & 2) {
 						if (VGA_GC[0] & 2) curval = 255;
 						else curval = 0;
-						logicVGA (curval, VGA_latch[1]);
 						curval = (~tempand & curval) | (tempand & VGA_latch[1]);
 						VRAM[addr32+planesize] = curval;
 					}
 				if (VGA_SC[2] & 4) {
 						if (VGA_GC[0] & 4) curval = 255;
 						else curval = 0;
-						logicVGA (curval, VGA_latch[2]);
 						curval = (~tempand & curval) | (tempand & VGA_latch[2]);
 						VRAM[addr32+planesize*2] = curval;
 					}
 				if (VGA_SC[2] & 8) {
 						if (VGA_GC[0] & 8) curval = 255;
 						else curval = 0;
-						logicVGA (curval, VGA_latch[3]);
 						curval = (~tempand & curval) | (tempand & VGA_latch[3]);
 						VRAM[addr32+planesize*3] = curval;
 					}
@@ -810,6 +808,8 @@ void writeVGA (uint32_t addr32, uint8_t value) {
 		}
 }
 
+uint8_t readmode;
+uint32_t readmap;
 uint8_t readVGA (uint32_t addr32) {
 	uint32_t planesize;
 	planesize = 0x10000;

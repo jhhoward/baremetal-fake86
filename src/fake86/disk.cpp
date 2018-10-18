@@ -374,7 +374,6 @@ ImagedDisk::ImagedDisk(const char* filename)
 		fseek (diskFile, 0L, SEEK_END);
 		diskSize = ftell (diskFile);
 		fseek (diskFile, 0L, SEEK_SET);
-		diskSize = 516096;
 	}
 	else diskSize = 0;
 }

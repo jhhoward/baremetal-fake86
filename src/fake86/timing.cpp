@@ -22,6 +22,7 @@
 
 #include "config.h"
 #include "types.h"
+#include "fake86.h"
 #if 1
 #elif defined(_WIN32)
 #include <Windows.h>
@@ -40,9 +41,6 @@ extern void tickaudio();
 extern void tickssource();
 extern void tickadlib();
 extern void tickBlaster();
-
-extern uint64_t gethostfreq();
-extern uint64_t gettick();
 
 uint64_t hostfreq = 1000000, lasttick = 0, curtick = 0, tickgap, i8253tickgap, lasti8253tick, scanlinetiming, lastscanlinetick, curscanline = 0;
 uint64_t sampleticks, lastsampletick, ssourceticks, lastssourcetick, adlibticks, lastadlibtick, lastblastertick, gensamplerate;

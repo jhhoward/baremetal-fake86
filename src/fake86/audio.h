@@ -37,3 +37,4 @@ struct wav_hdr_s {
 };
 
 extern uint8_t speakerenabled;
+extern uint8_t usessource;

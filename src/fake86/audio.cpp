@@ -42,18 +42,19 @@ uint8_t bmpfilename[256];
 
 int8_t samps[2400];
 
+uint8_t audiobufferfilled() {
+	if (audbufptr >= usebuffersize) return(1);
+	return(0);
+}
+
 void tickaudio() {
 	int16_t sample;
 	if (audbufptr >= usebuffersize) return;
 	sample = adlibgensample() >> 4;
-	//sample += getssourcebyte();
+	if (usessource) sample += getssourcebyte();
 	sample += getBlasterSample();
 	if (speakerenabled) sample += (speakergensample() >> 1);
-	if (audbufptr < sizeof(audbuf) ) audbuf[audbufptr++] = (uint8_t) 
-( 
-(uint16_t) sample+128);
-	//if ((cursampnum % doublesamplecount) == 0) audbuf[audbufptr++] = (int8_t)sample;
-	//cursampnum++;
+	if (audbufptr < sizeof(audbuf) ) audbuf[audbufptr++] = (uint8_t) ((uint16_t) sample+128);
 }
 
 extern uint64_t timinginterval;

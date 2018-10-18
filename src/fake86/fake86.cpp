@@ -161,6 +161,8 @@ void inithardware() {
 	initscreen ( (uint8_t *) build);
 }
 
+uint8_t dohardreset = 0;
+uint8_t audiobufferfilled();
 extern void bufsermousedata (uint8_t value);
 
 void initfake86()
@@ -206,6 +208,12 @@ bool simulatefake86()
 	exec86(10000);
 	if (scrmodechange) doscrmodechange();
 
+	/*while (!audiobufferfilled()) {
+		timing();
+		tickaudio();
+	}*/
+	
+	
 	//handleinput();
 
 	return running != 0;
