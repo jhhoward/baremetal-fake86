@@ -61,6 +61,25 @@ struct struct_drive {
 	char *filename;
 };
 
+#ifdef _WIN32
+#include <stdio.h>
+class ImagedDisk : public DiskInterface
+{
+public:
+	ImagedDisk(const char* filename);
+	virtual ~ImagedDisk();
+	virtual int read (uint8_t *buffer, unsigned count) override;
+	virtual int write (const uint8_t *buffer, unsigned count) override;
+
+	virtual uint64_t seek (uint64_t offset) override;
+	virtual uint64_t getSize() override;
+
+private:
+	FILE* diskFile;
+	uint64_t diskSize;
+};
+#endif
+
 void insertembeddeddisk(uint8_t drivenum, uint8_t* data, uint32_t size);
 void insertdisk(uint8_t drivenum, DiskInterface* disk);
 void ejectdisk(uint8_t drivenum);

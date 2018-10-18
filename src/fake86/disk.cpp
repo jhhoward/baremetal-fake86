@@ -363,3 +363,47 @@ uint64_t EmbeddedDisk::seek (uint64_t offset)
 	position = offset;
 	return position;
 }
+
+#ifdef _WIN32
+ImagedDisk::ImagedDisk(const char* filename)
+{
+	fopen_s(&diskFile, filename, "rb");
+	
+	if(diskFile)
+	{
+		fseek (diskFile, 0L, SEEK_END);
+		diskSize = ftell (diskFile);
+		fseek (diskFile, 0L, SEEK_SET);
+		diskSize = 516096;
+	}
+	else diskSize = 0;
+}
+
+ImagedDisk::~ImagedDisk()
+{
+	if(diskFile)
+	{
+		fclose(diskFile);
+	}
+}
+
+int ImagedDisk::read (uint8_t *buffer, unsigned count)
+{
+	return fread(buffer, 1, count, diskFile);
+}
+
+int ImagedDisk::write (const uint8_t *buffer, unsigned count)
+{
+	return fwrite(buffer, 1, count, diskFile);
+}
+
+uint64_t ImagedDisk::seek (uint64_t offset)
+{
+	return fseek (diskFile, offset, SEEK_SET);
+}
+
+uint64_t ImagedDisk::getSize()
+{
+	return diskSize;
+}
+#endif
